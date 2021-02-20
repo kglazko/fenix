@@ -16,12 +16,15 @@ import mozilla.components.browser.menu.BrowserMenuHighlight
 import mozilla.components.browser.menu.ext.getHighlight
 import mozilla.components.browser.menu.item.BrowserMenuDivider
 import mozilla.components.browser.menu.item.BrowserMenuHighlightableItem
+import mozilla.components.browser.menu.item.BrowserMenuImageSwitch
 import mozilla.components.browser.menu.item.BrowserMenuImageText
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.support.ktx.android.content.getColorFromAttr
+import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.R
+import org.mozilla.fenix.components.toolbar.ToolbarMenu
 import org.mozilla.fenix.experiments.ExperimentBranch
 import org.mozilla.fenix.experiments.Experiments
 import org.mozilla.fenix.ext.components
@@ -38,6 +41,7 @@ class HomeMenu(
     private val onHighlightPresent: (BrowserMenuHighlight) -> Unit = {}
 ) {
     sealed class Item {
+        data class RequestDesktop(val isChecked: Boolean) : Item()
         object WhatsNew : Item()
         object Help : Item()
         object AddonsManager : Item()
@@ -106,6 +110,8 @@ class HomeMenu(
                 else -> R.drawable.ic_bookmark_filled
             }
         }
+        context.getDrawable(bookmarksIcon)?.setVisible(false, true)
+
         val bookmarksItem = BrowserMenuImageText(
             context.getString(R.string.library_bookmarks),
             bookmarksIcon,
@@ -137,7 +143,7 @@ class HomeMenu(
         }
 
         val addons = BrowserMenuImageText(
-            context.getString(R.string.browser_menu_add_ons),
+            context.getString(R.string.browser_menu_extensions),
             R.drawable.ic_addons_extensions,
             primaryTextColor
         ) {
@@ -150,14 +156,6 @@ class HomeMenu(
             primaryTextColor
         ) {
             onItemTapped.invoke(Item.Settings)
-        }
-
-        val syncedTabsItem = BrowserMenuImageText(
-            context.getString(R.string.library_synced_tabs),
-            R.drawable.ic_synced_tabs,
-            primaryTextColor
-        ) {
-            onItemTapped.invoke(Item.SyncedTabs)
         }
 
         val helpItem = BrowserMenuImageText(
@@ -186,23 +184,54 @@ class HomeMenu(
 
         val settings = context.components.settings
 
-        val menuItems = listOfNotNull(
-            if (settings.shouldDeleteBrowsingDataOnQuit) quitItem else null,
-            settingsItem,
-            BrowserMenuDivider(),
-            if (settings.syncedTabsInTabsTray) null else syncedTabsItem,
-            bookmarksItem,
-            historyItem,
-            downloadsItem,
-            BrowserMenuDivider(),
-            addons,
-            BrowserMenuDivider(),
-            whatsNewItem,
-            helpItem,
-            accountAuthItem
-        ).also { items ->
-            items.getHighlight()?.let { onHighlightPresent(it) }
+        val desktopSiteItem = BrowserMenuImageSwitch(
+            imageResource = R.drawable.ic_desktop,
+            label = context.getString(R.string.browser_menu_desktop_site),
+            initialState = {
+                false
+            }
+        ) { checked ->
+            onItemTapped.invoke(Item.RequestDesktop(checked))
         }
+
+        val menuItems =
+            if (!FeatureFlags.toolbarMenuFeature) {
+                listOfNotNull(
+                    if (settings.shouldDeleteBrowsingDataOnQuit) quitItem else null,
+                    bookmarksItem,
+                    historyItem,
+                    downloadsItem,
+                    BrowserMenuDivider(),
+                    addons,
+                    BrowserMenuDivider(),
+                    whatsNewItem,
+                    helpItem,
+                    accountAuthItem,
+                    settingsItem,
+                    BrowserMenuDivider()
+                ).also { items ->
+                    items.getHighlight()?.let { onHighlightPresent(it) }
+                }
+            }
+
+        else {
+                listOfNotNull(
+                    BrowserMenuDivider(),
+                    settingsItem,
+                    helpItem,
+                    whatsNewItem,
+                    BrowserMenuDivider(),
+                    desktopSiteItem,
+                    BrowserMenuDivider(),
+                    accountAuthItem,
+                    addons,
+                    downloadsItem,
+                    historyItem,
+                    bookmarksItem
+                ).also { items ->
+                    items.getHighlight()?.let { onHighlightPresent(it) }
+                }
+            }
 
         if (shouldUseBottomToolbar) {
             menuItems.reversed()
